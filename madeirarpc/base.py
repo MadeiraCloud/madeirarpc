@@ -1,21 +1,21 @@
 """
 Copyright 2009 Josh Marshall
-Licensed under the Apache License, Version 2.0 (the "License"); 
-you may not use this file except in compliance with the License. 
-You may obtain a copy of the License at 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-   http://www.apache.org/licenses/LICENSE-2.0 
+   http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software 
-distributed under the License is distributed on an "AS IS" BASIS, 
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-See the License for the specific language governing permissions and 
-limitations under the License. 
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ============================
-Base RPC Handler for Tornado 
+Base RPC Handler for Tornado
 ============================
-This is a basic server implementation, designed for use within the 
+This is a basic server implementation, designed for use within the
 Tornado framework. The classes in this library should not be used
 directly, but rather though the XML or JSON RPC implementations.
 You can use the utility functions like 'private' and 'start_server'.
@@ -40,9 +40,9 @@ config = Config()
 class BaseRPCParser(object):
     """
     This class is responsible for managing the request, dispatch,
-    and response formatting of the system. It is tied into the 
-    _RPC_ attribute of the BaseRPCHandler (or subclasses) and 
-    populated as necessary throughout the request. Use the 
+    and response formatting of the system. It is tied into the
+    _RPC_ attribute of the BaseRPCHandler (or subclasses) and
+    populated as necessary throughout the request. Use the
     .faults attribute to take advantage of the built-in error
     codes.
     """
@@ -101,14 +101,14 @@ class BaseRPCParser(object):
         self.handler._requests = len(requests)
         for request in requests:
             self.dispatch(request[0], request[1])
-        
+
     def dispatch(self, method_name, params):
         """
-        This method walks the attribute tree in the method 
+        This method walks the attribute tree in the method
         and passes the parameters, either in positional or
         keyword form, into the appropriate method on the
         Handler class. Currently supports only positional
-        or keyword arguments, not mixed. 
+        or keyword arguments, not mixed.
         """
         if method_name in dir(RequestHandler):
             # Pre-existing, not an implemented attribute
@@ -150,21 +150,19 @@ class BaseRPCParser(object):
         except Exception:
             self.traceback(method_name, params)
             return self.handler.result(self.faults.internal_error())
-        
-        if 'async' in dir(method) and method.async:
+
+        if getattr(method, 'async', False):
             # Asynchronous response -- the method should have called
             # self.result(RESULT_VALUE)
-            if response != None:
+            if response is not None:
                 # This should be deprecated to use self.result
-                message = "Async results should use 'self.result()'"
-                message += " Return result will be ignored."
-                logging.warning(message)
+                return self.handler.result(self.faults.internal_error())
         else:
             # Synchronous result -- we call result manually.
             return self.handler.result(response)
-            
+
     def response(self, handler):
-        """ 
+        """
         This is the callback for a single finished dispatch.
         Once all the dispatches have been run, it calls the
         parser library to parse responses and then calls the
@@ -207,7 +205,7 @@ class BaseRPCParser(object):
         """
         Extend this on the implementing protocol. If it
         should error out, return the output of the
-        'self.faults.fault_name' response. Otherwise, 
+        'self.faults.fault_name' response. Otherwise,
         it MUST return a TUPLE of TUPLE. Each entry
         tuple must have the following structure:
         ('method_name', params)
@@ -218,19 +216,19 @@ class BaseRPCParser(object):
         ( ('add', [5,4]), ('add', {'x':5, 'y':4}) )
         """
         return ([], [])
-    
+
     def parse_responses(self, responses):
         """
-        Extend this on the implementing protocol. It must 
-        return a response that can be returned as output to 
+        Extend this on the implementing protocol. It must
+        return a response that can be returned as output to
         the client.
         """
         return self.encode(responses, methodresponse = True)
 
     def check_method(self, attr_name, obj):
         """
-        Just checks to see whether an attribute is private 
-        (by the decorator or by a leading underscore) and 
+        Just checks to see whether an attribute is private
+        (by the decorator or by a leading underscore) and
         returns boolean result.
         """
         if attr_name.startswith('_'):
@@ -249,7 +247,7 @@ class BaseRPCHandler(RequestHandler):
     _results = None
     _requests = 0
     _RPC_finished = False
-    
+
     @tornado.web.asynchronous
     def post(self):
         # Very simple -- dispatches request body to the parser
@@ -257,7 +255,7 @@ class BaseRPCHandler(RequestHandler):
         self._results = []
         request_body = self.request.body
         self._RPC_.run(self, request_body)
-        
+
     def result(self, result, *results):
         """ Use this to return a result. """
         if results:
@@ -266,12 +264,12 @@ class BaseRPCHandler(RequestHandler):
             results = result
         self._results.append(results)
         self._RPC_.response(self)
-        
+
     def on_result(self, response_text):
         """ Asynchronous callback. """
         self.set_header('Content-Type', self._RPC_.content_type)
         self.finish(response_text)
-    
+
 class FaultMethod(object):
     """
     This is the 'dynamic' fault method so that the message can
@@ -294,16 +292,16 @@ class Faults(object):
     parser.faults query, and returns a FaultMethod to be called so
     that the message can be changed. If the 'dynamic' attribute is
     not a key in the codes list, then it will error.
-    
+
     USAGE:
         parser.fault.parse_error('Error parsing content.')
-        
+
     If no message is passed in, it will check the messages dictionary
     for the same key as the codes dict. Otherwise, it just prettifies
     the code 'key' from the codes dict.
-    
+
     """
-    codes = { 
+    codes = {
         'parse_error': -32700,
         'method_not_found': -32601,
         'invalid_request': -32600,
@@ -312,13 +310,13 @@ class Faults(object):
     }
 
     messages = {}
-  
+
     def __init__(self, parser, fault=None):
         self.library = parser.library
         self.fault = fault
         if not self.fault:
             self.fault = getattr(self.library, 'Fault')
-            
+
     def __getattr__(self, attr):
         message = 'Error'
         if attr in self.messages.keys():
@@ -337,12 +335,12 @@ def private(func):
     Use this to make a method private.
     It is intended to be used as a decorator.
     If you wish to make a method tree private, just
-    create and set the 'private' variable to True 
+    create and set the 'private' variable to True
     on the tree object itself.
     """
     func.private = True
     return func
-    
+
 def async(func):
     """
     Use this to make a method asynchronous
@@ -405,7 +403,7 @@ class TestRPCHandler(BaseRPCHandler):
 
     def ping(self, x):
         return x
-        
+
     def noargs(self):
         return 'Works!'
 
